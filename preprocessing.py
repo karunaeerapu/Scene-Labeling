@@ -1,14 +1,15 @@
+#!/usr/bin/env python3
+
 """
 Code for preprocessing and loading image and label data.
 """
 
+import os
 import sys
+from os.path import isfile
 
 import numpy as np
 from PIL import Image
-import os
-
-from os.path import isfile
 
 
 def read_object_classes(classes_map_filename):
@@ -45,6 +46,10 @@ def read_object_classes(classes_map_filename):
                     category_name = vals[4]
                 else:
                     raise ValueError("Category map must have either 2 or 5 columns")
+
+                # TODO resolve this?
+                if category_num < 0:
+                    continue
 
                 # check for duplicate categories
                 if category_num in ids:
@@ -90,6 +95,11 @@ def image_to_np_array(img_filename, float_cols=True):
     else:
         data = np.asarray(img, dtype="uint8")
     return data
+
+
+def np_array_to_image(array, output_filename):
+    img = Image.fromarray((array * 255).astype(dtype=np.uint8), mode='RGB')
+    img.save(output_filename)
 
 
 def labels_to_np_array(lab_filename):
@@ -141,10 +151,10 @@ def get_patch(array, center, patch_size):
     """
     rounded_width = int(patch_size / 2)
     return array[center[0] - rounded_width: center[0] + rounded_width + 1,
-                 center[1] - rounded_width: center[1] + rounded_width + 1]
+           center[1] - rounded_width: center[1] + rounded_width + 1]
 
 
-def from_games_dataset(data_dir, train_fraction=None, num_train=None):
+def from_games_dataset(data_dir, data_fraction=None, num_train=None):
     labels_dir = os.path.join(data_dir, 'labels')
     images_dir = os.path.join(data_dir, 'images')
 
@@ -155,25 +165,24 @@ def from_games_dataset(data_dir, train_fraction=None, num_train=None):
     images = [os.path.join(images_dir, f) for f in os.listdir(images_dir) if
               isfile(os.path.join(images_dir, f)) and not f.startswith('.')]
     images = sorted(images)
-    train_files = zip(labels, images)
+    train_files = list(zip(labels, images))
 
     # if specified, only choose subset of training data
-    if train_fraction is not None and num_train is None:
-        num_train = int(len(train_files) * train_fraction)
+    if data_fraction is not None and num_train is None:
+        num_train = int(len(train_files) * data_fraction)
     if num_train is not None:
         train_files = train_files[:num_train]
 
     for label_f, image_f in train_files:
-        print "Current image:", os.path.basename(image_f)
+        print("Current image:", os.path.basename(image_f))
         if os.path.basename(label_f) != os.path.basename(image_f):
-            print "UNEQUAL IMAGE NAMES!"
+            print("UNEQUAL IMAGE NAMES!")
         image = image_to_np_array(image_f)
         labels = labels_to_np_array(label_f)
         yield image, labels
 
 
-# TODO negative label nums could mess up paletted output
-def stanford_bgrounds_dataset(data_dir, train_fraction=None, num_train=None):
+def stanford_bgrounds_dataset(data_dir, data_fraction=None, num_train=None):
     labels_dir = os.path.join(data_dir, 'labels')
     images_dir = os.path.join(data_dir, 'images')
 
@@ -184,11 +193,11 @@ def stanford_bgrounds_dataset(data_dir, train_fraction=None, num_train=None):
     images = [os.path.join(images_dir, f) for f in os.listdir(images_dir) if
               isfile(os.path.join(images_dir, f)) and not f.startswith('.')]
     images = sorted(images)
-    train_files = zip(labels, images)
+    train_files = list(zip(labels, images))
 
     # if specified, only choose subset of training data
-    if train_fraction is not None and num_train is None:
-        num_train = int(len(train_files) * train_fraction)
+    if data_fraction is not None and num_train is None:
+        num_train = int(len(train_files) * data_fraction)
     if num_train is not None:
         if num_train >= 0:
             train_files = train_files[:num_train]
@@ -197,28 +206,11 @@ def stanford_bgrounds_dataset(data_dir, train_fraction=None, num_train=None):
 
     for label_f, image_f in train_files:
         if os.path.basename(label_f).split('.')[0] != os.path.basename(image_f).split('.')[0]:
-            print "UNEQUAL IMAGE NAMES!", label_f, image_f
+            print("UNEQUAL IMAGE NAMES!", label_f, image_f)
         img_id = os.path.basename(label_f).split('.')[0]
         image = image_to_np_array(image_f)
         labels = text_labels_to_np_array(label_f)
         yield image, labels, img_id
-
-
-def gaussian(g_sigma, g_size):
-    """
-    Creates a 2D gaussian mask with values form 0 to 1, of the given size and variance.
-    :param gSigma: Filter size
-    :param g_Size: Patch size
-    :return: A gaussian filter of the given size and variance
-    """
-    x1 = np.linspace(-g_size / 2, (g_size / 2) - 1, g_size)
-    y1 = np.linspace(-g_size / 2, (g_size / 2) - 1, g_size)
-
-    mx, my = np.meshgrid(x1, y1)
-
-    g_window = np.exp(-(mx ** 2 + my ** 2) / (2 * g_sigma ** 2))
-
-    return g_window
 
 
 # list of datasets for which we have iterators
@@ -229,12 +221,9 @@ DATASETS = {FROM_GAMES: from_games_dataset, SIFT_FLOW: None, STANFORD_BGROUND: s
 
 
 def main():
-    color_map = sys.argv[1]
-    files = sys.argv[2:]
-    for infile in files:
-        category_colors, category_names, names_to_ids = read_object_classes(color_map)
-        labels = text_labels_to_np_array(infile)
-        save_labels_array(labels, output_filename=infile+'truth.png', colors=category_colors)
+    file = sys.argv[1]
+    arr = image_to_np_array(file, float_cols=True)
+    print(arr[-1, -1, :])
 
 
 if __name__ == '__main__':

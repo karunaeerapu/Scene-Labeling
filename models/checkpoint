@@ -1,2 +1,0 @@
-model_checkpoint_path: "fine_tune_15_second_half.ckpt"
-all_model_checkpoint_paths: "fine_tune_15_second_half.ckpt"

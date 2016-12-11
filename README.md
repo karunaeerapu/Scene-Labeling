@@ -6,14 +6,12 @@ as seen in [Pinheiro et al, 2014](http://www.jmlr.org/proceedings/papers/v32/pin
 
 ### Summary of files
     README.md           -- README file
-    accuracy_results/   -- Text files containing results of different models
     category_maps/      -- Text files containing category info for Stanford  & "Data from Games" datasets
     eval.py             -- Script for testing the model
     model.py            -- Code for rCNN model
-    models/             -- Saved models from training
     preprocessing.py    -- Code for processing input data and image patches
     requirements.txt    -- Lists python package requirements
-    test_results/       -- Model output, as images
+    test/		-- Contains unit tests and sample data
     train.py            -- Script for trainin model
 
 ## Installation

@@ -1,15 +1,17 @@
+#!/usr/bin/env python3
+
 import tensorflow as tf
 
 
-# TODO instead of adding only one channel for labels, the labels should be 1-hot vectors, so we need 3+num_channels
-# layers to the input
-
-
-class CNNModel:
-    PATCH_SIZE = 67
+class RCNNModel:
+    """
+    A recurrent convolutional neural network for scene labeling. A single convolutional net is iteratively applied to
+    an image, using as input the pixel colors as well as the label predictions from the previous iteration. This
+    allows the model to use context of nearby labels to improve predictions.
+    """
 
     def __init__(self, hidden_size_1, hidden_size_2, batch_size, num_classes, learning_rate, num_layers):
-        # TODO fix padding
+        # padding?
         self.hidden_size_1 = hidden_size_1
         self.hidden_size_2 = hidden_size_2
         self.batch_size = batch_size
@@ -22,7 +24,6 @@ class CNNModel:
         self.output = tf.placeholder(tf.int32, [batch_size, None, None])
 
         # Set up variable weights for model. These are shared across recurrent layers
-
         self.W_conv1 = tf.Variable(tf.truncated_normal([8, 8, 3 + self.num_classes, self.hidden_size_1], stddev=0.1))
         b_conv1 = tf.Variable(tf.constant(0.1, shape=[self.hidden_size_1]))
 

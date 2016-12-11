@@ -1,94 +1,117 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python3
 import argparse
+import os
 import random
 import time
 
 import numpy as np
 import tensorflow as tf
 
-from model import CNNModel, save_model, restore_model
-from preprocessing import read_object_classes, DATASETS, FROM_GAMES, get_patch, gaussian
+from model import RCNNModel, save_model, restore_model
+from preprocessing import read_object_classes, DATASETS, FROM_GAMES, save_labels_array
 
 
-def run_model_iter(sess, model, image, labels, is_training=False, use_patches=False, patches_per_image=1000,
-                   gaussian_sigma=None):
+class AccuracyCounter:
     """
-    Given an image, runs over model outputs. This is either one label plane for the whole image, or a series of patch labels
-    :param sess:
-    :param model:
-    :param image:
-    :param labels:
-    :param is_training:
-    :param use_patches:
-    :param patches_per_image:
-    :param gaussian_sigma:
-    :return:
+    This class stores per-class accuracy counts for some task, such as testing a classifier.
     """
-    if is_training:
-        # For training, only run loss and train ops
-        ops_to_run = [model.loss, model.train_step]
-    else:
-        # For testing, get outputs of both layers as well as loss
-        ops_to_run = [model.logits[0], model.logits[1], model.loss]
-    i = 0
 
+    def __init__(self, num_classes):
+        self.num_classes = num_classes
+        self.class_correct_counts = np.zeros(self.num_classes)
+        self.class_total_counts = np.zeros(self.num_classes)
+
+    def add_sample(self, predicted_labels, true_labels):
+        """
+        Adds a sample to the accuracy counts.
+        :param predicted_labels: An array of predicted labels
+        :param true_labels: An array of the true labels, in the same shape as `predicted_labels`
+        :return: The % accuracy for the given sample across all classes
+        """
+        print("*****")
+        correct_class_labels = np.equal(predicted_labels, true_labels)
+        for c in range(self.num_classes):
+            current_class_labels = np.equal(true_labels, c)
+            self.class_total_counts[c] += np.sum(current_class_labels)
+            self.class_correct_counts[c] += np.sum(current_class_labels * correct_class_labels)
+        return np.mean(correct_class_labels)
+
+    def get_results(self):
+        """
+        Get results on the accuracy for the samples stored in this counter object.
+        :return: A tuple of overall accuracy, per-class accuracy, and total counts for each class
+        """
+        class_accuracies = self.class_correct_counts / self.class_total_counts
+        return np.mean(class_accuracies), class_accuracies, self.class_total_counts
+
+
+def run_model_on_image(sess, model, image, labels, is_training=False):
+    """
+    Given an image and labels, runs the model and returns output. A training step is also optionally run.
+    :param sess: The session within which to run the model
+    :param model: The model to run
+    :param image: The input RGB image, a numpy array of shape height x width x 3.
+    :param labels: An array of labels corresponding to the image, of shape height x width
+    :param is_training: If true, trains the model to minimize the loss.
+    :return: The results of running the model. Specifically, a tuple containing logits for each layer, the numerical
+    loss, and an optional element corresponding to the training step.
+    """
+    # check for invalid labels in image
     error_classes = np.sum(np.less(labels, 0) + np.greater_equal(labels, model.num_classes))
     if error_classes > 0:
-        print "ERROR - Incorrect labels in image:", labels
+        print("ERROR - Incorrect labels in image:", labels)
         return
 
+    ops_to_run = model.logits + [model.loss]
+    if is_training:
+        ops_to_run.append(model.train_step)
+
     h, w = labels.shape
-
-    if use_patches:
-        patch_size = model.PATCH_SIZE
-        if gaussian_sigma is not None:
-            mask = gaussian(g_sigma=gaussian_sigma, g_size=patch_size)
-            mask = np.expand_dims(mask, axis=2)
-            mask = np.repeat(mask, repeats=3, axis=2)
-        else:
-            mask = 1
-        for _ in range(patches_per_image):
-            y = random.random() * (h - 2 * patch_size) + patch_size
-            x = random.random() * (w - 2 * patch_size) + patch_size
-            patch = get_patch(image, center=(y, x), patch_size=patch_size) * mask
-            patch_labels = get_patch(labels, center=(y, x), patch_size=patch_size)
-            input_patch = np.append(patch, np.zeros(shape=[patch_size, patch_size, model.num_classes],
-                                                    dtype=np.float32), axis=2)
-            feed_dict = {model.inpt: [input_patch], model.output: [patch_labels]}
-            ops_results = sess.run(ops_to_run, feed_dict=feed_dict)
-            yield ops_results, patch_labels
-    else:
-        input_image = np.append(image, np.zeros(shape=[h, w, model.num_classes], dtype=np.float32), axis=2)
-        feed_dict = {model.inpt: [input_image], model.output: [labels]}
-        yield sess.run(ops_to_run, feed_dict=feed_dict)
+    input_image = np.append(image, np.zeros(shape=[h, w, model.num_classes], dtype=np.float32), axis=2)
+    feed_dict = {model.inpt: [input_image], model.output: [labels]}
+    return sess.run(ops_to_run, feed_dict=feed_dict)
 
 
-def train(sess, model, dataset_iter, num_epochs, use_patches=False, patches_per_image=1000, gaussian_sigma=None,
-          save_path=None):
-    def iter_model():
-        return run_model_iter(sess, model, image, labels, is_training=True, use_patches=use_patches,
-                              patches_per_image=patches_per_image, gaussian_sigma=gaussian_sigma)
-
+# TODO actually implement batch size
+def run_model(sess, model, dataset_iter, batch_size=1, num_epochs=1, training=False, save_path=None, color_map=None,
+              output_dir=None):
     for i in range(num_epochs):
-        print 'Running epoch %d/%d...' % (i + 1, num_epochs)
+        print('Running epoch %d/%d...' % (i + 1, num_epochs))
+        layer_accuracies = [AccuracyCounter(model.num_classes)] * model.num_layers
         n = 0
         for image, labels, img_id in dataset_iter():
             start_time = time.time()
             n += 1
-            if use_patches:
-                losses = [ops[0] for ops, _ in iter_model()]
-            else:
-                losses = [loss for loss, _ in iter_model()]
-
-            avg_loss = sum(losses) / len(losses)
-            if avg_loss != avg_loss:
-                print "Loss values were NaN! Stopping training without saving."
+            op_results = run_model_on_image(sess, model, image, labels, is_training=training)
+            layer_logits = [logits[0] for logits in op_results[:model.num_layers]]
+            loss = op_results[model.num_layers]
+            if loss != loss:
+                print("Loss is NaN! Stopping training without saving.")
                 return
             elapsed_time = time.time() - start_time
-            print "Trained on image #%d (%s): Loss: %f Elapsed time: %.1f" % (n, img_id, avg_loss, elapsed_time)
+            print("%s on image #%d (%s): Loss: %f Elapsed time: %.1f" % (
+                "Trained" if training else "Tested", n, img_id, loss, elapsed_time))
+
+            # accuracy
+            for l in range(model.num_layers):
+                stride = 2 ** (l + 1)
+                true_labels = labels[::stride, ::stride]
+                predicted_labels = np.argmax(layer_logits[l], axis=2)
+                layer_accuracies[l].add_sample(predicted_labels=predicted_labels, true_labels=true_labels)
+
+            # write outputs to disk
+            if output_dir is not None and color_map is not None:
+                for l in range(model.num_layers):
+                    output_filename = os.path.join(output_dir, img_id + '_test_%d.png' % (l + 1))
+                    predicted_labels = np.argmax(layer_logits[l][0], axis=2)
+                    predicted_labels = np.kron(predicted_labels, np.ones(shape=[2 ** (l + 1), 2 ** (l + 1)]))
+                    save_labels_array(predicted_labels.astype(np.uint8), output_filename, colors=color_map)
+
+        for l in range(model.num_layers):
+            print("Layer %d accuracies:" % (l + 1), layer_accuracies[l].get_results())
 
         if save_path is not None:
-            print "Epoch %i finished, saving trained model to %s..." % (i + 1, save_path)
+            print("Epoch %i finished, saving trained model to %s..." % (i + 1, save_path))
             save_model(sess, save_path)
 
 
@@ -98,32 +121,27 @@ def main():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--dataset', type=str, default=FROM_GAMES, choices=DATASETS.keys(),
                         help='Type of dataset to use. This determines the expected format of the data directory')
-    parser.add_argument('--data_dir', type=str, help='Directory for image and label data')
     parser.add_argument('--category_map', type=str, help='File that maps colors ')
+    parser.add_argument('--data_dir', type=str, help='Directory for image and label data')
+    parser.add_argument('--data_fraction', type=float, default=0.8,
+                        help='Fraction of data to train on. If positive, trains on first X images, otherwise trains on '
+                             'last X images.')
     parser.add_argument('--hidden_size_1', type=int, default=25, help='First Hidden size for CNN model')
     parser.add_argument('--hidden_size_2', type=int, default=50, help='Second Hidden size for CNN model')
-    parser.add_argument('--patch_size', type=int, default=67, help='Patch size for input images')
     parser.add_argument('--learning_rate', type=float, default=1e-4, help='Learning rate for training CNN model')
     # TODO figure out batch size
     parser.add_argument('--batch_size', type=int, default=1, help='Batch size for training CNN model')
     parser.add_argument('--num_epochs', type=int, default=1, help='Number of epochs for training CNN model')
-    parser.add_argument('--use_patches', action='store_true', default=False,
-                        help='Whether to train model on individual patches')
-    parser.add_argument('--patches_per_image', type=int, default=1000,
-                        help='Number of patches to sample for each image during training of CNN model')
-    parser.add_argument('--gaussian_sigma', type=int, choices=[15, 30], default=None,
-                        help='Size of gaussian mask to apply to patches. Not used by default.')
-    parser.add_argument('--fix_random_seed', action='store_true', default=False,
-                        help='Whether to reset random seed at start, for debugging.')
     parser.add_argument('--model_save_path', type=str, default=None,
                         help='Optional location to store saved model in.')
     parser.add_argument('--model_load_path', type=str, default=None,
                         help='Optional location to load saved model from.')
+    parser.add_argument('--training', type=bool, default=False, help='Whether or not to train model.')
+    parser.add_argument('--output_dir', type=str, default=None, help='Directory in which to save test output images.')
     parser.add_argument('--dry_run', action='store_true', default=False,
                         help='If true, only trains on one image, to test the training code quickly.')
-    parser.add_argument('--train_fraction', type=float, default=0.8,
-                        help='Fraction of data to train on. If positive, trains on first X images, otherwise trains on '
-                             'last X images.')
+    parser.add_argument('--fix_random_seed', action='store_true', default=False,
+                        help='Whether to reset random seed at start, for debugging.')
 
     args = parser.parse_args()
 
@@ -141,21 +159,18 @@ def main():
             return dataset_func(args.data_dir, num_train=1)
     else:
         def dataset_epoch_iter():
-            return dataset_func(args.data_dir, train_fraction=args.train_fraction)
+            return dataset_func(args.data_dir, data_fraction=args.data_fraction)
 
-    model = CNNModel(args.hidden_size_1, args.hidden_size_2, args.batch_size, num_classes,
-                     args.learning_rate, num_layers=2)
+    model = RCNNModel(args.hidden_size_1, args.hidden_size_2, args.batch_size, num_classes,
+                      args.learning_rate, num_layers=2)
 
     sess = tf.Session()
     init = tf.initialize_all_variables()
     sess.run(init)
     if args.model_load_path is not None:
         restore_model(sess, args.model_load_path)
-    train(sess, model, dataset_epoch_iter, num_epochs=args.num_epochs, use_patches=args.use_patches,
-          patches_per_image=args.patches_per_image, save_path=args.model_save_path, gaussian_sigma=args.gaussian_sigma)
-
-    print "Saving trained model to %s ..." % args.model_save_path
-    save_model(sess, args.model_save_path)
+    run_model(sess, model, dataset_epoch_iter, num_epochs=args.num_epochs, training=args.training,
+              save_path=args.model_save_path, output_dir=args.output_dir, color_map=args.category_map)
 
 
 if __name__ == '__main__':
