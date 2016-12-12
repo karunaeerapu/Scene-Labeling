@@ -24,13 +24,13 @@ class RCNNModel:
         self.output = tf.placeholder(tf.int32, [batch_size, None, None])
 
         # Set up variable weights for model. These are shared across recurrent layers
-        self.W_conv1 = tf.Variable(tf.truncated_normal([8, 8, 3 + self.num_classes, self.hidden_size_1], stddev=0.1))
+        self.w_conv1 = tf.Variable(tf.truncated_normal([8, 8, 3 + self.num_classes, self.hidden_size_1], stddev=0.1))
         b_conv1 = tf.Variable(tf.constant(0.1, shape=[self.hidden_size_1]))
 
-        W_conv2 = tf.Variable(tf.truncated_normal([8, 8, self.hidden_size_1, self.hidden_size_2], stddev=0.1))
+        w_conv2 = tf.Variable(tf.truncated_normal([8, 8, self.hidden_size_1, self.hidden_size_2], stddev=0.1))
         b_conv2 = tf.Variable(tf.constant(0.1, shape=[self.hidden_size_2]))
 
-        W_conv3 = tf.Variable(tf.truncated_normal([1, 1, self.hidden_size_2, self.num_classes], stddev=0.1))
+        w_conv3 = tf.Variable(tf.truncated_normal([1, 1, self.hidden_size_2, self.num_classes], stddev=0.1))
         b_conv3 = tf.Variable(tf.constant(0.1, shape=[self.num_classes]))
 
         self.logits = []
@@ -42,11 +42,11 @@ class RCNNModel:
             current_output = tf.strided_slice(current_output, [0, 0, 0], [0, 0, 0], strides=[1, 2, 2], end_mask=7)
 
             # convolution steps
-            h_conv1 = tf.nn.conv2d(current_input, self.W_conv1, strides=[1, 1, 1, 1], padding='SAME') + b_conv1
+            h_conv1 = tf.nn.conv2d(current_input, self.w_conv1, strides=[1, 1, 1, 1], padding='SAME') + b_conv1
             h_pool1 = tf.nn.max_pool(h_conv1, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
             tanh = tf.tanh(h_pool1)
-            h_conv2 = tf.nn.conv2d(tanh, W_conv2, strides=[1, 1, 1, 1], padding='SAME') + b_conv2
-            h_conv3 = tf.nn.conv2d(h_conv2, W_conv3, strides=[1, 1, 1, 1], padding='SAME') + b_conv3
+            h_conv2 = tf.nn.conv2d(tanh, w_conv2, strides=[1, 1, 1, 1], padding='SAME') + b_conv2
+            h_conv3 = tf.nn.conv2d(h_conv2, w_conv3, strides=[1, 1, 1, 1], padding='SAME') + b_conv3
             current_logits = h_conv3
 
             # tensorflow 11 doesn't have multidimensional softmax, we need to get predictions manually :-(

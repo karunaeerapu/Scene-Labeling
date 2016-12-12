@@ -8,7 +8,7 @@ import numpy as np
 import tensorflow as tf
 
 from model import RCNNModel, save_model, restore_model
-from preprocessing import read_object_classes, DATASETS, FROM_GAMES, save_labels_array
+from preprocessing import read_object_classes, DATASETS, FROM_GAMES, save_labels_array, np_array_to_image
 
 
 class AccuracyCounter:
@@ -28,7 +28,6 @@ class AccuracyCounter:
         :param true_labels: An array of the true labels, in the same shape as `predicted_labels`
         :return: The % accuracy for the given sample across all classes
         """
-        print("*****")
         correct_class_labels = np.equal(predicted_labels, true_labels)
         for c in range(self.num_classes):
             current_class_labels = np.equal(true_labels, c)
@@ -45,7 +44,7 @@ class AccuracyCounter:
         return np.mean(class_accuracies), class_accuracies, self.class_total_counts
 
 
-def run_model_on_image(sess, model, image, labels, is_training=False):
+def run_model_on_image(sess, model, image, labels, is_training: bool = False):
     """
     Given an image and labels, runs the model and returns output. A training step is also optionally run.
     :param sess: The session within which to run the model
@@ -75,6 +74,19 @@ def run_model_on_image(sess, model, image, labels, is_training=False):
 # TODO actually implement batch size
 def run_model(sess, model, dataset_iter, batch_size=1, num_epochs=1, training=False, save_path=None, color_map=None,
               output_dir=None):
+    """
+    Runs a given model on the given data set. Outputs per-class accuracies for the given data, and optionally trains
+    the model as well.
+    :param sess: A tensorflow session in which to run the model
+    :param model: A given rCNN model
+    :param dataset_iter: An iterator over tuples of (image, labels, img_id) in the dataset
+    :param batch_size: Batch size for training (TODO currently unused)
+    :param num_epochs: Number of epochs to run over the entire dataset
+    :param training: Whether to run a training step for each sample, or to only test.
+    :param save_path: Path in which to store saved model. (Saves every epoch)
+    :param color_map: Optional, an array of colors for each class label, used to output predicted labels.
+    :param output_dir: Optional, directory in which to output predicted labels for each class.
+    """
     for i in range(num_epochs):
         print('Running epoch %d/%d...' % (i + 1, num_epochs))
         layer_accuracies = [AccuracyCounter(model.num_classes)] * model.num_layers
@@ -115,6 +127,64 @@ def run_model(sess, model, dataset_iter, batch_size=1, num_epochs=1, training=Fa
             save_model(sess, save_path)
 
 
+def optimize_input(sess, model, labels, step_size=2e-2, num_iterations=200):
+    """
+    Optimizes input for the given model using gradient descent, in order to match the given output labels.
+    This is done by minimizing loss between the given labels and the output from running the generated image through
+    the model.
+    Each time a gradient descent step fails to improve loss, the step size is halved.
+    :param sess: A tensorflow session
+    :param model: A given rCNN model
+    :param labels: The labels to match, as a numpy array of shape (height x width)
+    :param step_size: The initial step size for gradient descent.
+    :param num_iterations: Number of gradient descent steps to run.
+    :return: The resulting image as an RGB numpy array of shape (height x width x 3)
+    """
+    # use loss from final layer
+    loss = model.errors[-1]
+    grad = tf.gradients(loss, model.inpt)[0]
+    h, w, = labels.shape
+    image = np.random.uniform(low=0.4, high=0.6, size=(h, w, 3))
+    # image = np.zeros(shape=(h, w, 3)) + 0.5
+    image = np.append(image, np.zeros(shape=[h, w, model.num_classes], dtype=np.float32), axis=2)
+    l_prev = None
+    for i in range(num_iterations):
+        g, l = sess.run([grad, loss], feed_dict={model.inpt: [image], model.output: [labels]})
+        if l_prev is not None and l_prev <= l:
+            step_size /= 2
+        g = g[0]  # we're using a batch size of 1 here
+        # normalize gradients
+        g /= g.std() + 1e-8
+        image[:, :, :3] -= g[:, :, :3] * step_size
+        print("Iteration %d, step size: %f, score: %f" % (i, step_size, l))
+        l_prev = l
+    return image[:, :, :3]
+
+
+def run_gradient_descent(sess, model, true_labels, output_file=None, category_colors=None):
+    """
+    Given a set of labels, iteratively optimizes inputs to produce those given labels. Similar to a Google "Deep Dream".
+    The produced image, as well as the resulting predicted labels, are returned and optionally saved.
+    :param sess: A tensorflow session
+    :param model: An rCNN model
+    :param true_labels: A given set of labels for an image, of shape (height x width)
+    :param output_file: Filename to store resulting image (as well resulting labels)
+    :param category_colors: Map from category to color, for storing resulting labels
+    :return: A tuple of (resulting image, resulting labels)
+    """
+    image = optimize_input(sess, model, true_labels)
+    if output_file is not None and category_colors is not None:
+        np_array_to_image(image, output_filename=output_file)
+
+    ops = run_model_on_image(sess, model, image, true_labels)
+    last_logits = ops[model.num_layers - 1][0]
+    predicted_labels = np.argmax(last_logits, axis=2)
+    predicted_labels = np.kron(predicted_labels, np.ones(shape=[2 ** model.num_layers, 2 ** model.num_layers]))
+    if output_file is not None and category_colors is not None:
+        save_labels_array(predicted_labels.astype(np.uint8), output_file + 'descent_labels.png', colors=category_colors)
+    return image, predicted_labels
+
+
 def main():
     # parse command line arguments
     parser = argparse.ArgumentParser(description='An rCNN scene labeling model.',
@@ -129,7 +199,6 @@ def main():
     parser.add_argument('--hidden_size_1', type=int, default=25, help='First Hidden size for CNN model')
     parser.add_argument('--hidden_size_2', type=int, default=50, help='Second Hidden size for CNN model')
     parser.add_argument('--learning_rate', type=float, default=1e-4, help='Learning rate for training CNN model')
-    # TODO figure out batch size
     parser.add_argument('--batch_size', type=int, default=1, help='Batch size for training CNN model')
     parser.add_argument('--num_epochs', type=int, default=1, help='Number of epochs for training CNN model')
     parser.add_argument('--model_save_path', type=str, default=None,
@@ -169,6 +238,7 @@ def main():
     sess.run(init)
     if args.model_load_path is not None:
         restore_model(sess, args.model_load_path)
+
     run_model(sess, model, dataset_epoch_iter, num_epochs=args.num_epochs, training=args.training,
               save_path=args.model_save_path, output_dir=args.output_dir, color_map=args.category_map)
 

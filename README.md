@@ -9,7 +9,7 @@ as seen in [Pinheiro et al, 2014](http://www.jmlr.org/proceedings/papers/v32/pin
     category_maps/      -- Text files containing category info for Stanford  & "Data from Games" datasets
     eval.py             -- Script for testing the model
     model.py            -- Code for rCNN model
-    preprocessing.py    -- Code for processing input data and image patches
+    preprocessing.py    -- Code for processing input data
     requirements.txt    -- Lists python package requirements
     test/		-- Contains unit tests and sample data
     train.py            -- Script for trainin model
