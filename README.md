@@ -1,4 +1,4 @@
-# CLPS 1520 Project - Scene Labeling with Recurrent Convolutional Neural Networks
+# Scene Labeling with Recurrent Convolutional Neural Networks
 
 ## Overview
 This project implements a "Recurrent Convolutional Neural Network" (rCNN) for scene labeling,
@@ -7,17 +7,16 @@ as seen in [Pinheiro et al, 2014](http://www.jmlr.org/proceedings/papers/v32/pin
 ### Summary of files
     README.md           -- README file
     category_maps/      -- Text files containing category info for Stanford  & "Data from Games" datasets
-    eval.py             -- Script for testing the model
     model.py            -- Code for rCNN model
     preprocessing.py    -- Code for processing input data
     requirements.txt    -- Lists python package requirements
     test/		-- Contains unit tests and sample data
-    train.py            -- Script for trainin model
+    train.py            -- Script for training and evaluating model
 
 ## Installation
  1. Clone or download this repository to your computer:
 
-    ```git clone https://github.com/NP-coder/CLPS1520Project.git```
+    ```git clone https://github.com/rkargon/Scene-Labeling.git```
 
  2. Install the necessary Python requirements through `pip`:
 
@@ -40,31 +39,33 @@ as seen in [Pinheiro et al, 2014](http://www.jmlr.org/proceedings/papers/v32/pin
 
       R  G  B category_num category_id
 
+   R,G,B values should be in the range [0,1].
    Category files for the Stanford Background and Data From Games datasets are provided in the folder `category_maps`.
 
 ## Running
 
 ### Training
-For training, use the `train.py` script. The following command trains the model on the Stanford dataset:
+For training, use the `train.py` script with the `--training` flag. The following command trains the model on the Stanford dataset:
 
-    python train.py --dataset stanford-bground --category_map category_maps/stanford_bground_categories.txt --data_dir <STANFORD DATA FOLDER> --model_save_path <SAVED_MODEL_FILE>
+    python train.py --training --dataset stanford-bground --category_map category_maps/stanford_bground_categories.txt --data_dir <STANFORD DATA FOLDER> --model_save_path <SAVED_MODEL_FILE>
 
 
 Running `train.py -h` will show additional parameters for the script, including different hyperparameters.
-`train.py` also supports the ability to train on specific patches surrounding individual pixels,
-and to apply gaussian filters to the input patches.
 
 ### Testing
-For testing, use the `eval.py` script.
+For testing, use the `train.py` script without the `--training` flag.
 This script will get per-class accuracies for each image, as well as output predicted labels as image files.
 The following command loads a saved model and evaluates accuracy on the stanford data set:
 
-    python eval.py --model <SAVED_MODEL> --category_map category_maps/stanford_bground_categories.txt --dataset stanford-bground --data_dir <STANFORD DATA FOLDER> --output_dir <RESULT IMAGES FOLDER>
+    python train.py --model <SAVED_MODEL> --category_map category_maps/stanford_bground_categories.txt --dataset stanford-bground --data_dir <STANFORD DATA FOLDER> --output_dir <RESULT IMAGES FOLDER>
 
 
-Similar to `train.py`, use the `-h` flag to see more parameters.
+This outputs per-clas accuracies for each layer of the recurrent rCNN, and also saves predicted labels for each layer.
 
 ## Credits
+
+This was originally submitted as a final project for Dr. Thomas Serre's <u>Computational Vision (CLPS1520)</u> course at Brown University.
+The code for the original project may be found at: https://github.com/NP-coder/CLPS1520Project
 
  - Tyler Barnes-Diana
  - Zhenhao Hou (Andrew)
