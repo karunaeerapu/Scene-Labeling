@@ -205,7 +205,7 @@ def main():
                         help='Optional location to store saved model in.')
     parser.add_argument('--model_load_path', type=str, default=None,
                         help='Optional location to load saved model from.')
-    parser.add_argument('--training', type=bool, default=False, help='Whether or not to train model.')
+    parser.add_argument('--training', action='store_true', default=False, help='Whether or not to train model.')
     parser.add_argument('--output_dir', type=str, default=None, help='Directory in which to save test output images.')
     parser.add_argument('--dry_run', action='store_true', default=False,
                         help='If true, only trains on one image, to test the training code quickly.')
