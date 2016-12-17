@@ -20,8 +20,8 @@ class RCNNModel:
         self.num_layers = num_layers
 
         # Set up placeholders for input and output
-        self.inpt = tf.placeholder(dtype=tf.float32, shape=[1, None, None, 3 + self.num_classes])
-        self.output = tf.placeholder(tf.int32, [1, None, None])
+        self.inpt = tf.placeholder(dtype=tf.float32, shape=[None, None, None, 3 + self.num_classes])
+        self.output = tf.placeholder(tf.int32, [None, None, None])
 
         # Set up variable weights for model. These are shared across recurrent layers
         self.w_conv1 = tf.Variable(tf.truncated_normal([8, 8, 3 + self.num_classes, self.hidden_size_1], stddev=0.1))

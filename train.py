@@ -13,7 +13,8 @@ import numpy as np
 import tensorflow as tf
 
 from model import RCNNModel, save_model, restore_model
-from preprocessing import read_object_classes, DATASETS, FROM_GAMES, save_labels_array, np_array_to_image
+from preprocessing import read_object_classes, DATASETS, FROM_GAMES, save_labels_array, np_array_to_image, \
+    interleave_images
 
 
 class AccuracyCounter:
@@ -92,14 +93,31 @@ def run_model(sess, model, dataset_iter, num_epochs=1, training=False, save_path
     """
     for i in range(num_epochs):
         print('Running epoch %d/%d...' % (i + 1, num_epochs))
-        layer_accuracies = [AccuracyCounter(model.num_classes)] * model.num_layers
+        layer_accuracies = [AccuracyCounter(model.num_classes) for _ in range(model.num_layers)]
         n = 0
         for image, labels, img_id in dataset_iter():
             start_time = time.time()
             n += 1
-            op_results = run_model_on_image(sess, model, image, labels, is_training=training)
-            layer_logits = [logits[0] for logits in op_results[:model.num_layers]]
-            loss = op_results[model.num_layers]
+            h, w = image.shape[:2]
+
+            # create several shifted copies of the input
+            shifted_images = []
+            shifted_labels = []
+            stride = 2 ** model.num_layers
+            for dy in range(stride):
+                for dx in range(stride):
+                    shifted_images.append(image[dy:, dx:, :])
+                    shifted_labels.append(labels[dy:, dx:])
+
+            # get model output for each shifted image/label pair
+            op_results = [run_model_on_image(sess, model, i, l, is_training=training) for i, l in
+                          zip(shifted_images, shifted_labels)]
+            grouped_results = list(zip(*op_results))
+
+            # for each shifted image, logits are in trivial batches of size 1.
+            layer_logits = [[shifted_logits[0] for shifted_logits in layer] for layer in
+                            grouped_results[:model.num_layers]]
+            loss = np.mean(grouped_results[model.num_layers])
             if loss != loss:
                 print("Loss is NaN! Stopping training without saving.")
                 return
@@ -107,20 +125,30 @@ def run_model(sess, model, dataset_iter, num_epochs=1, training=False, save_path
             print("%s on image #%d (%s): Loss: %f Elapsed time: %.1f" % (
                 "Trained" if training else "Tested", n, img_id, loss, elapsed_time))
 
+            # interlace logits to create labels that have the same size as the input labels
+            merged_labels = []
+            for l in range(model.num_layers):
+                current_stride = 2 ** (l + 1)
+                layer_labels = [np.argmax(shifted_logits, axis=2) for shifted_logits in layer_logits[l]]
+                # If this is not the final layer, not all shifted outputs are needed.
+                # Specifically, if the outputs each correspond to a different pixel in the top left (2^num_layers x
+                # 2^num_layers pixels), one only needs the first (2^current_layer x 2 ^ current_layer)
+                if l < model.num_layers - 1:
+                    layer_labels = [layer_labels[dy * stride + dx] for dx in range(current_stride) for dy in range(current_stride)]
+                print("&&&&&", layer_labels[0].shape)
+                merged_labels.append(interleave_images(layer_labels, stride=current_stride))
+
             # accuracy
             for l in range(model.num_layers):
-                stride = 2 ** (l + 1)
-                true_labels = labels[::stride, ::stride]
-                predicted_labels = np.argmax(layer_logits[l], axis=2)
-                layer_accuracies[l].add_sample(predicted_labels=predicted_labels, true_labels=true_labels)
+                print("Getting accuracy for layer", l + 1)
+                print(merged_labels[l].shape)
+                layer_accuracies[l].add_sample(predicted_labels=merged_labels[l], true_labels=labels)
 
             # write outputs to disk
             if output_dir is not None and color_map is not None:
                 for l in range(model.num_layers):
                     output_filename = os.path.join(output_dir, img_id + '_test_%d.png' % (l + 1))
-                    predicted_labels = np.argmax(layer_logits[l], axis=2)
-                    predicted_labels = np.kron(predicted_labels, np.ones(shape=[2 ** (l + 1), 2 ** (l + 1)]))
-                    save_labels_array(predicted_labels.astype(np.uint8), output_filename, colors=color_map)
+                    save_labels_array(merged_labels[l].astype(np.uint8), output_filename, colors=color_map)
 
         for l in range(model.num_layers):
             print("Layer %d accuracies:" % (l + 1), layer_accuracies[l].get_results())
@@ -230,7 +258,7 @@ def main():
     dataset_func = DATASETS[args.dataset]
     if args.dry_run:
         def dataset_epoch_iter():
-            return dataset_func(args.data_dir, num_train=1)
+            return dataset_func(args.data_dir, num_samples=1)
     else:
         def dataset_epoch_iter():
             return dataset_func(args.data_dir, data_fraction=args.data_fraction)

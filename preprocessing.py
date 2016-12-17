@@ -161,6 +161,64 @@ def get_patch(array: np.ndarray, center: Sequence[int], patch_size: int) -> np.n
            center[1] - rounded_width: center[1] + rounded_width + 1]
 
 
+def interleave_images(images, stride):
+    """
+    Interleaves a series of images with the given stride. The pixels of each image correspond to one out of `stride`
+    pixels of every row and column of the output image.
+    The top left corner of each image in `images` corresponds to a pixel in [0:stride, 0:stride] in the output,
+    in row-major order.
+    That is, if the stride is 2, the images' corners will be at pixels [(0,0), (0,1), (1,0), (1,1)] in the output,
+    respectively.
+    If the image higher dimensions (e.g. 3 RGB channels), these must have the same sizes across all images. Only the
+    first two dimensions are interleaved when creating output.
+
+    e.g. `images` =
+                    [ [[ 1,  2,  3,  4],
+                       [ 5,  6,  7,  8],
+                       [ 9, 10, 11, 12]],
+
+                      [[13, 14, 15, 16],
+                       [17, 18, 19, 20],
+                       [21, 22, 23, 24]],
+
+                      [[25, 26, 27, 28],
+                       [29, 30, 31, 32],
+                       [33, 34, 35, 36]],
+
+                      [[37, 38, 39, 40],
+                       [41, 42, 43, 44],
+                       [45, 46, 47, 48]]
+
+         `stride` = 2
+
+         output is:
+
+         [[ 1, 13,  2, 14,  3, 15,  4, 16],
+          [25, 37, 26, 38, 27, 39, 28, 40],
+          [ 5, 17,  6, 18,  7, 19,  8, 20],
+          [29, 41, 30, 42, 31, 43, 32, 44],
+          [ 9, 21, 10, 22, 11, 23, 12, 24],
+          [33, 45, 34, 46, 35, 47, 36, 48]]
+
+    :param images: A sequence of images of length (stride * stride).
+    :param stride: The space between pixels of the same input image in the output.
+    :return: An array with width and height equal to the sum of the width and height of the input images, respectively.
+    The array will contain the interleaved pixels of the input images.
+    """
+    print([i.shape for i in images])
+    h = images[0].shape[0] * stride
+    w = images[0].shape[1] * stride
+    # preserve higher-order shape of input
+    shape = (h, w) + images[0].shape[2:]
+    output = np.zeros(shape=shape)
+    i = 0
+    for dy in range(stride):
+        for dx in range(stride):
+            output[dy::stride, dx::stride] = images[i]
+            i += 1
+    return output
+
+
 def get_sorted_files_in_folder(folder: str, extension: str = None) -> List[str]:
     """
     Returns a sorted list of all the non-hidden files in a folder, possibly filtered by extension.
