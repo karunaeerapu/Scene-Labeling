@@ -76,8 +76,7 @@ def run_model_on_image(sess, model, image, labels, is_training: bool = False):
     return sess.run(ops_to_run, feed_dict=feed_dict)
 
 
-# TODO actually implement batch size
-def run_model(sess, model, dataset_iter, batch_size=1, num_epochs=1, training=False, save_path=None, color_map=None,
+def run_model(sess, model, dataset_iter, num_epochs=1, training=False, save_path=None, color_map=None,
               output_dir=None):
     """
     Runs a given model on the given data set. Outputs per-class accuracies for the given data, and optionally trains
@@ -85,7 +84,6 @@ def run_model(sess, model, dataset_iter, batch_size=1, num_epochs=1, training=Fa
     :param sess: A tensorflow session in which to run the model
     :param model: A given rCNN model
     :param dataset_iter: An iterator over tuples of (image, labels, img_id) in the dataset
-    :param batch_size: Batch size for training (TODO currently unused)
     :param num_epochs: Number of epochs to run over the entire dataset
     :param training: Whether to run a training step for each sample, or to only test.
     :param save_path: Path in which to store saved model. (Saves every epoch)
@@ -120,7 +118,6 @@ def run_model(sess, model, dataset_iter, batch_size=1, num_epochs=1, training=Fa
             if output_dir is not None and color_map is not None:
                 for l in range(model.num_layers):
                     output_filename = os.path.join(output_dir, img_id + '_test_%d.png' % (l + 1))
-                    print("*****", layer_logits[l].shape)
                     predicted_labels = np.argmax(layer_logits[l], axis=2)
                     predicted_labels = np.kron(predicted_labels, np.ones(shape=[2 ** (l + 1), 2 ** (l + 1)]))
                     save_labels_array(predicted_labels.astype(np.uint8), output_filename, colors=color_map)
@@ -208,7 +205,6 @@ def main():
     parser.add_argument('--hidden_size_1', type=int, default=25, help='First Hidden size for CNN model')
     parser.add_argument('--hidden_size_2', type=int, default=50, help='Second Hidden size for CNN model')
     parser.add_argument('--learning_rate', type=float, default=1e-4, help='Learning rate for training CNN model')
-    parser.add_argument('--batch_size', type=int, default=1, help='Batch size for training CNN model')
     parser.add_argument('--num_epochs', type=int, default=1, help='Number of epochs for training CNN model')
     parser.add_argument('--model_save_path', type=str, default=None,
                         help='Optional location to store saved model in.')
@@ -239,7 +235,7 @@ def main():
         def dataset_epoch_iter():
             return dataset_func(args.data_dir, data_fraction=args.data_fraction)
 
-    model = RCNNModel(args.hidden_size_1, args.hidden_size_2, args.batch_size, num_classes,
+    model = RCNNModel(args.hidden_size_1, args.hidden_size_2, num_classes,
                       args.learning_rate, num_layers=2)
 
     sess = tf.Session()

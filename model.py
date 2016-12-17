@@ -10,19 +10,18 @@ class RCNNModel:
     allows the model to use context of nearby labels to improve predictions.
     """
 
-    def __init__(self, hidden_size_1: int, hidden_size_2: int, batch_size: int, num_classes: int, learning_rate: float,
+    def __init__(self, hidden_size_1: int, hidden_size_2: int, num_classes: int, learning_rate: float,
                  num_layers: int):
         # padding?
         self.hidden_size_1 = hidden_size_1
         self.hidden_size_2 = hidden_size_2
-        self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.num_classes = num_classes
         self.num_layers = num_layers
 
         # Set up placeholders for input and output
-        self.inpt = tf.placeholder(dtype=tf.float32, shape=[batch_size, None, None, 3 + self.num_classes])
-        self.output = tf.placeholder(tf.int32, [batch_size, None, None])
+        self.inpt = tf.placeholder(dtype=tf.float32, shape=[1, None, None, 3 + self.num_classes])
+        self.output = tf.placeholder(tf.int32, [1, None, None])
 
         # Set up variable weights for model. These are shared across recurrent layers
         self.w_conv1 = tf.Variable(tf.truncated_normal([8, 8, 3 + self.num_classes, self.hidden_size_1], stddev=0.1))
