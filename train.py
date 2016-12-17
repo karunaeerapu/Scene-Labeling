@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+
+"""
+a
+"""
+
 import argparse
 import os
 import random
@@ -115,7 +120,8 @@ def run_model(sess, model, dataset_iter, batch_size=1, num_epochs=1, training=Fa
             if output_dir is not None and color_map is not None:
                 for l in range(model.num_layers):
                     output_filename = os.path.join(output_dir, img_id + '_test_%d.png' % (l + 1))
-                    predicted_labels = np.argmax(layer_logits[l][0], axis=2)
+                    print("*****", layer_logits[l].shape)
+                    predicted_labels = np.argmax(layer_logits[l], axis=2)
                     predicted_labels = np.kron(predicted_labels, np.ones(shape=[2 ** (l + 1), 2 ** (l + 1)]))
                     save_labels_array(predicted_labels.astype(np.uint8), output_filename, colors=color_map)
 
@@ -186,6 +192,9 @@ def run_gradient_descent(sess, model, true_labels, output_file=None, category_co
 
 
 def main():
+    """
+    Trains or evaluates an rCNN model.
+    """
     # parse command line arguments
     parser = argparse.ArgumentParser(description='An rCNN scene labeling model.',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -218,7 +227,7 @@ def main():
         random.seed(0)
 
     # load class labels
-    category_colors, category_names, names_to_ids = read_object_classes(args.category_map)
+    category_colors, category_names = read_object_classes(args.category_map)
     num_classes = len(category_names)
 
     # create function that when called, provides iterator to an epoch of the data
@@ -240,7 +249,7 @@ def main():
         restore_model(sess, args.model_load_path)
 
     run_model(sess, model, dataset_epoch_iter, num_epochs=args.num_epochs, training=args.training,
-              save_path=args.model_save_path, output_dir=args.output_dir, color_map=args.category_map)
+              save_path=args.model_save_path, output_dir=args.output_dir, color_map=category_colors)
 
 
 if __name__ == '__main__':

@@ -10,7 +10,8 @@ class RCNNModel:
     allows the model to use context of nearby labels to improve predictions.
     """
 
-    def __init__(self, hidden_size_1, hidden_size_2, batch_size, num_classes, learning_rate, num_layers):
+    def __init__(self, hidden_size_1: int, hidden_size_2: int, batch_size: int, num_classes: int, learning_rate: float,
+                 num_layers: int):
         # padding?
         self.hidden_size_1 = hidden_size_1
         self.hidden_size_2 = hidden_size_2
@@ -69,7 +70,7 @@ class RCNNModel:
         self.train_step = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
 
 
-def save_model(sess, path, saver=None):
+def save_model(sess: tf.Session, path: str, saver: tf.train.Saver = None) -> tf.train.Saver:
     """
     Saves a tensorflow session to the given path.
     NOTE: This currently saves *all* variables in the session, unless one passes in a custom Saver object.
@@ -85,7 +86,7 @@ def save_model(sess, path, saver=None):
     return saver
 
 
-def restore_model(sess, path, saver=None):
+def restore_model(sess: tf.Session, path: str, saver: tf.train.Saver = None) -> tf.train.Saver:
     """
     Loads a tensorflow session from the given path.
     NOTE: This currently loads *all* variables in the saved file, unless one passes in a custom Saver object.
