@@ -47,7 +47,8 @@ class AccuracyCounter:
         :return: A tuple of overall accuracy, per-class accuracy, and total counts for each class
         """
         class_accuracies = self.class_correct_counts / self.class_total_counts
-        return np.mean(class_accuracies), class_accuracies, self.class_total_counts
+        total_accuracy = np.sum(self.class_correct_counts) / np.sum(self.class_total_counts)
+        return total_accuracy, class_accuracies, self.class_total_counts
 
 
 def run_model_on_image(sess, model, image, labels, is_training: bool = False):
@@ -148,8 +149,10 @@ def run_model(sess, model, dataset_iter, num_epochs=1, training=False, save_path
                     save_labels_array(merged_labels[l].astype(np.uint8), output_filename, colors=color_map)
 
         for l in range(model.num_layers):
-            acc_results = layer_accuracies[l].get_results()
-            print("Layer %d accuracies:" % (l + 1), acc_results)
+            total_accuracy, class_accuracies, class_total_counts = layer_accuracies[l].get_results()
+            print("Layer %d total accuracy:" % (l + 1), total_accuracy)
+            print("Layer %d per-class accuracies:" % (l + 1), class_accuracies)
+            print("Layer %d per-class total counts:" % (l + 1), class_total_counts)
 
         if save_path is not None:
             print("Epoch %i finished, saving trained model to %s..." % (i + 1, save_path))
