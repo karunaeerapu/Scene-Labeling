@@ -205,9 +205,8 @@ def interleave_images(images, stride):
     :return: An array with width and height equal to the sum of the width and height of the input images, respectively.
     The array will contain the interleaved pixels of the input images.
     """
-    print([i.shape for i in images])
-    h = images[0].shape[0] * stride
-    w = images[0].shape[1] * stride
+    h = sum([i.shape[0] for i in images[::stride]])
+    w = sum([i.shape[1] for i in images[:stride]])
     # preserve higher-order shape of input
     shape = (h, w) + images[0].shape[2:]
     output = np.zeros(shape=shape)
@@ -230,7 +229,7 @@ def get_sorted_files_in_folder(folder: str, extension: str = None) -> List[str]:
     files = [os.path.join(folder, f) for f in os.listdir(folder) if
              isfile(os.path.join(folder, f)) and not f.startswith('.')]
     if extension is not None:
-        filter(lambda f: f.startswith(extension), files)
+        files = filter(lambda f: f.endswith(extension), files)
     return sorted(files)
 
 

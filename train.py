@@ -98,7 +98,6 @@ def run_model(sess, model, dataset_iter, num_epochs=1, training=False, save_path
         for image, labels, img_id in dataset_iter():
             start_time = time.time()
             n += 1
-            h, w = image.shape[:2]
 
             # create several shifted copies of the input
             shifted_images = []
@@ -134,15 +133,13 @@ def run_model(sess, model, dataset_iter, num_epochs=1, training=False, save_path
                 # Specifically, if the outputs each correspond to a different pixel in the top left (2^num_layers x
                 # 2^num_layers pixels), one only needs the first (2^current_layer x 2 ^ current_layer)
                 if l < model.num_layers - 1:
-                    layer_labels = [layer_labels[dy * stride + dx] for dx in range(current_stride) for dy in range(current_stride)]
-                print("&&&&&", layer_labels[0].shape)
+                    layer_labels = [layer_labels[dy * stride + dx] for dy in range(current_stride) for dx in range(current_stride)]
                 merged_labels.append(interleave_images(layer_labels, stride=current_stride))
 
             # accuracy
             for l in range(model.num_layers):
-                print("Getting accuracy for layer", l + 1)
-                print(merged_labels[l].shape)
-                layer_accuracies[l].add_sample(predicted_labels=merged_labels[l], true_labels=labels)
+                acc = layer_accuracies[l].add_sample(predicted_labels=merged_labels[l], true_labels=labels)
+                print("Accuracy for layer %d: %f" % (l + 1, acc))
 
             # write outputs to disk
             if output_dir is not None and color_map is not None:
@@ -151,7 +148,8 @@ def run_model(sess, model, dataset_iter, num_epochs=1, training=False, save_path
                     save_labels_array(merged_labels[l].astype(np.uint8), output_filename, colors=color_map)
 
         for l in range(model.num_layers):
-            print("Layer %d accuracies:" % (l + 1), layer_accuracies[l].get_results())
+            acc_results = layer_accuracies[l].get_results()
+            print("Layer %d accuracies:" % (l + 1), acc_results)
 
         if save_path is not None:
             print("Epoch %i finished, saving trained model to %s..." % (i + 1, save_path))
