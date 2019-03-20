@@ -3,6 +3,7 @@
 ## Overview
 This project implements a "Recurrent Convolutional Neural Network" (rCNN) for scene labeling,
 as seen in [Pinheiro et al, 2014](http://www.jmlr.org/proceedings/papers/v32/pinheiro14.pdf).
+A copy of the paper is also available in this repo's root directory, `pinheiro-collobert-rcnns-scene-labelling-2014.pdf`.
 
 ### Summary of files
     README.md           -- README file
